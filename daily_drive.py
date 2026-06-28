@@ -223,13 +223,28 @@ def get_liked_songs(sp: spotipy.Spotify, count: int) -> list[str]:
     """
     Fetch up to `count` track URIs from the user's liked/saved songs.
 
-    Retrieves a larger pool first, then picks randomly so the playlist
-    feels fresh each day.
+    Starts at a random position in the library each day so you never hear
+    the same songs two days in a row, even with a large liked-songs library.
     """
     log.info("Fetching liked songs …")
-    pool_size = min(count * 4, 200)   # Fetch 4× what we need, up to 200
+    pool_size = min(count * 4, 200)   # Fetch 4× what we need for a good shuffle pool
+
+    # Find out how many liked songs exist so we can jump to a random spot
+    try:
+        total = sp.current_user_saved_tracks(limit=1).get("total", 0)
+    except spotipy.SpotifyException as exc:
+        log.warning("Could not determine liked-songs library size: %s", exc)
+        total = 0
+
+    # Pick a random starting point — skip the newest songs so we dig into the archive
+    if total > pool_size:
+        start_offset = random.randint(0, total - pool_size)
+    else:
+        start_offset = 0
+    log.info("Liked songs library: %d tracks — starting from position %d.", total, start_offset)
+
     uris: list[str] = []
-    offset = 0
+    offset = start_offset
 
     while len(uris) < pool_size:
         try:
@@ -249,7 +264,7 @@ def get_liked_songs(sp: spotipy.Spotify, count: int) -> list[str]:
 
         offset += len(items)
         if not results.get("next"):
-            break  # No more pages
+            break  # Reached the end of the library
 
     log.info("Fetched %d liked songs (pool).", len(uris))
     random.shuffle(uris)
@@ -266,8 +281,8 @@ def get_artist_tracks(sp: spotipy.Spotify, count: int) -> list[str]:
     log.info("Fetching your personal top tracks …")
     uris: list[str] = []
 
-    # Pull top tracks from two time windows to get variety
-    for time_range in ("short_term", "medium_term"):
+    # Pull top tracks from all three time windows for maximum variety
+    for time_range in ("short_term", "medium_term", "long_term"):
         if len(uris) >= count * 3:
             break
         try:
