@@ -13,8 +13,21 @@ Schedule:      add to cron (see README.md for instructions)
 # ── CONFIGURATION ─────────────────────────────────────────────────────────────
 # Edit the values below to customise your Daily Drive playlist.
 
-# Spotify show ID for the primary podcast (default: ABC News Daily)
-PRIMARY_PODCAST_ID = "1D4A4NKKF0axPvAS7h31Lu"
+# Priority podcasts — always included, always in this order, at the front of the playlist.
+# The latest episode from each show is fetched regardless of when it was released.
+# To find a show's ID: open it in Spotify → Share → Copy link → the ID is the last part of the URL.
+PRIORITY_PODCAST_IDS = [
+    "1D4A4NKKF0axPvAS7h31Lu",  # ABC News Daily
+    "0jg3AfXsIV2WBvw4oGgFFW",  # SBS News Headlines
+    "4omeoOVsGWXhhFObFWGTvT",  # The Quicky
+]
+
+# Human-readable names for each priority podcast (used only in log messages)
+PRIORITY_PODCAST_NAMES = {
+    "1D4A4NKKF0axPvAS7h31Lu": "ABC News Daily",
+    "0jg3AfXsIV2WBvw4oGgFFW": "SBS News Headlines",
+    "4omeoOVsGWXhhFObFWGTvT": "The Quicky",
+}
 
 # Set to True to also include new episodes from other podcasts you follow
 INCLUDE_FOLLOWED_PODCASTS = True
@@ -184,8 +197,8 @@ def get_followed_podcast_episodes(sp: spotipy.Spotify) -> list[dict]:
             show_id = show.get("id")
             show_name = show.get("name", show_id)
 
-            # Skip the primary podcast — we already handle it separately
-            if show_id == PRIMARY_PODCAST_ID:
+            # Skip priority podcasts — they are always fetched first in main()
+            if show_id in PRIORITY_PODCAST_IDS:
                 checked += 1
                 continue
 
@@ -404,22 +417,24 @@ def main():
     sp = authenticate()
     user_id = sp.current_user()["id"]
 
-    # 2. Fetch podcast episodes
+    # 2. Fetch podcast episodes — priority shows first, in configured order
     episode_uris: list[str] = []
 
-    # Primary podcast (ABC News Daily)
-    primary_episode = get_latest_episode(sp, PRIMARY_PODCAST_ID, "ABC News Daily")
-    if primary_episode:
-        uri = primary_episode.get("uri")
-        if uri:
-            episode_uris.append(uri)
-    else:
-        log.warning(
-            "Could not fetch ABC News Daily episode — continuing without it. "
-            "Check the show ID in the CONFIG section at the top of this script."
-        )
+    for show_id in PRIORITY_PODCAST_IDS:
+        show_name = PRIORITY_PODCAST_NAMES.get(show_id, show_id)
+        episode = get_latest_episode(sp, show_id, show_name)
+        if episode:
+            uri = episode.get("uri")
+            if uri:
+                episode_uris.append(uri)
+        else:
+            log.warning(
+                "Could not fetch episode for %s — skipping. "
+                "Check the show ID in PRIORITY_PODCAST_IDS at the top of this script.",
+                show_name,
+            )
 
-    # Other followed podcasts (today's new episodes only)
+    # Other followed podcasts (today's new episodes only, priority shows excluded)
     if INCLUDE_FOLLOWED_PODCASTS:
         followed_episodes = get_followed_podcast_episodes(sp)
         for ep in followed_episodes:
