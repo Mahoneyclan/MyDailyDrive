@@ -44,15 +44,19 @@ Log file:      daily_drive.log (in this folder — check here if something goes 
 # To reorder:       move the lines around — top of the list = first in playlist.
 # ---------------------------------------------------------------------------
 PRIORITY_PODCAST_IDS = [
-    "1D4A4NKKF0axPvAS7h31Lu",  # ABC News Daily       — always first
-    "0jg3AfXsIV2WBvw4oGgFFW",  # SBS News Headlines   — always second
-    "4omeoOVsGWXhhFObFWGTvT",  # The Quicky           — always third
+    "0B7f89Byi1DjBTIQH4h0t2",  # Squiz Today              — always first
+    "4EtcwFXVpPO3S3tJ0HHJhA",  # 7NEWS Australia Podcast  — always second
+    "1D4A4NKKF0axPvAS7h31Lu",  # ABC News Daily            — always third
+    "0jg3AfXsIV2WBvw4oGgFFW",  # SBS News Headlines        — always fourth
+    "4omeoOVsGWXhhFObFWGTvT",  # The Quicky                — always fifth
 ]
 
 # Friendly display names for each priority podcast.
 # These are only used in log messages so you can see what's happening.
 # Keep this in sync with PRIORITY_PODCAST_IDS above.
 PRIORITY_PODCAST_NAMES = {
+    "0B7f89Byi1DjBTIQH4h0t2": "Squiz Today",
+    "4EtcwFXVpPO3S3tJ0HHJhA": "7NEWS Australia Podcast",
     "1D4A4NKKF0axPvAS7h31Lu": "ABC News Daily",
     "0jg3AfXsIV2WBvw4oGgFFW": "SBS News Headlines",
     "4omeoOVsGWXhhFObFWGTvT": "The Quicky",
