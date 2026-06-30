@@ -45,7 +45,7 @@ Log file:      daily_drive.log (in this folder — check here if something goes 
 # ---------------------------------------------------------------------------
 PRIORITY_PODCAST_IDS = [
     "0B7f89Byi1DjBTIQH4h0t2",  # Squiz Today              — always first
-    "4EtcwFXVpPO3S3tJ0HHJhA",  # 7NEWS Australia Podcast  — always second
+    "1MTvf2ptjqVisFHLAEgOXc",  # 7News Just In            — always second
     "1D4A4NKKF0axPvAS7h31Lu",  # ABC News Daily            — always third
     "0jg3AfXsIV2WBvw4oGgFFW",  # SBS News Headlines        — always fourth
     "4omeoOVsGWXhhFObFWGTvT",  # The Quicky                — always fifth
@@ -56,7 +56,7 @@ PRIORITY_PODCAST_IDS = [
 # Keep this in sync with PRIORITY_PODCAST_IDS above.
 PRIORITY_PODCAST_NAMES = {
     "0B7f89Byi1DjBTIQH4h0t2": "Squiz Today",
-    "4EtcwFXVpPO3S3tJ0HHJhA": "7NEWS Australia Podcast",
+    "1MTvf2ptjqVisFHLAEgOXc": "7News Just In",
     "1D4A4NKKF0axPvAS7h31Lu": "ABC News Daily",
     "0jg3AfXsIV2WBvw4oGgFFW": "SBS News Headlines",
     "4omeoOVsGWXhhFObFWGTvT": "The Quicky",
