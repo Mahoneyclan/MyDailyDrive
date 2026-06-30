@@ -14,7 +14,7 @@ How it works:
      (starts at a different position each day so you always hear different songs)
   5. Grabs a selection from your personal top tracks (recent + all-time)
   6. Interleaves the podcast episodes and music tracks together
-     (e.g. 3 songs → episode → 3 songs → episode → ...)
+     (e.g. episode → 3 songs → episode → 3 songs → ...)
   7. Creates or overwrites a playlist called "My Daily Drive" in your account
 
 Run manually:  python3 daily_drive.py
@@ -95,7 +95,7 @@ ARTIST_TRACKS_PERCENT = 50
 PLAYLIST_NAME = "My Daily Drive"
 
 # How many music tracks to play between each podcast episode.
-# For example, 3 means: song, song, song, episode, song, song, song, episode ...
+# For example, 3 means: episode, song, song, song, episode, song, song, song ...
 MUSIC_TRACKS_BETWEEN_EPISODES = 3
 
 
@@ -542,7 +542,7 @@ def interleave(episode_uris: list[str], track_uris: list[str]) -> list[str]:
     Mix podcast episodes and music tracks into one ordered playlist.
 
     Pattern (with MUSIC_TRACKS_BETWEEN_EPISODES = 3):
-      song → song → song → episode → song → song → song → episode → song → ...
+      episode → song → song → song → episode → song → song → song → ...
 
     Any music tracks left over after all episodes have been placed are
     appended at the end of the playlist.
@@ -560,14 +560,14 @@ def interleave(episode_uris: list[str], track_uris: list[str]) -> list[str]:
     # Keep going until we've placed all episodes and all music tracks
     while episodes or music:
 
-        # Add a block of N music tracks before each episode
-        for _ in range(MUSIC_TRACKS_BETWEEN_EPISODES):
-            if music:
-                result.append(music.pop(0))  # Take the next song from the front of the list
-
         # Add the next podcast episode (if any remain)
         if episodes:
             result.append(episodes.pop(0))  # Take the next episode from the front of the list
+
+        # Add a block of N music tracks after each episode
+        for _ in range(MUSIC_TRACKS_BETWEEN_EPISODES):
+            if music:
+                result.append(music.pop(0))  # Take the next song from the front of the list
 
     return result
 
@@ -730,7 +730,7 @@ def main():
         sys.exit(1)
 
     # ── Step 5: Interleave episodes and music ─────────────────────────────────
-    # Produces an ordered list: music, music, music, episode, music, music, music, episode ...
+    # Produces an ordered list: episode, music, music, music, episode, music, music, music ...
     ordered_uris = interleave(episode_uris, track_uris)
     log.info(
         "Playlist will contain %d item(s): %d episode(s) + %d track(s).",
