@@ -3,10 +3,10 @@
 Automatically builds a personalised **My Daily Drive** playlist in your Spotify account each morning, mixing Australian news podcast episodes with music from your library.
 
 Default behaviour:
-- Fetches the latest **ABC News Daily** episode
+- Fetches the latest episode from 5 priority Australian news podcasts (always included, always in order)
 - Checks your other followed podcasts for any episode released today
-- Pulls 25 tracks from your liked songs and followed artists (50/50 split)
-- Interleaves episodes and music (3 songs → 1 episode → 3 songs → …)
+- Pulls 50 tracks — 25 from your liked songs, 25 from your personal top tracks
+- Interleaves episodes and music (1 episode → 3 songs → 1 episode → 3 songs → …)
 - Creates or overwrites a private playlist called **My Daily Drive**
 
 ---
@@ -113,86 +113,122 @@ Open `daily_drive.py` in any text editor and edit the **CONFIGURATION** block ne
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PRIMARY_PODCAST_ID` | ABC News Daily | Spotify show ID of your main podcast |
+| `PRIORITY_PODCAST_IDS` | 5 Australian news shows | Spotify show IDs always included, always first, in order |
 | `INCLUDE_FOLLOWED_PODCASTS` | `True` | Also add today's episodes from other followed shows |
 | `MAX_FOLLOWED_PODCASTS` | `15` | How many followed shows to check |
-| `MUSIC_TRACK_COUNT` | `25` | Total music tracks in the playlist |
+| `MUSIC_TRACK_COUNT` | `50` | Total music tracks in the playlist |
 | `LIKED_SONGS_PERCENT` | `50` | % of music from your liked songs |
-| `ARTIST_TRACKS_PERCENT` | `50` | % of music from your followed artists |
+| `ARTIST_TRACKS_PERCENT` | `50` | % of music from your personal top tracks |
 | `PLAYLIST_NAME` | `"My Daily Drive"` | Name of the Spotify playlist |
 | `MUSIC_TRACKS_BETWEEN_EPISODES` | `3` | Songs between each podcast episode |
 
----
+### Priority podcasts
 
-## Step 6 — Schedule with cron (runs automatically every morning)
+The default priority podcasts (in order) are:
 
-### Find the full path to your Python interpreter
+1. Squiz Today
+2. 7News Just In
+3. ABC News Daily
+4. SBS News Headlines
+5. The Quicky
 
-```bash
-cd /Volumes/GDrive/Github/MyDailyDrive
-source .venv/bin/activate
-which python3
-```
-
-Copy the output — it will look like:
-```
-/Volumes/GDrive/Github/MyDailyDrive/.venv/bin/python3
-```
-
-### Open your crontab
-
-```bash
-crontab -e
-```
-
-This opens a text editor (usually `vi` — press `i` to start typing).
-
-### Add this line
-
-Replace `<python_path>` with what you copied above:
-
-```
-0 7 * * * <python_path> /Volumes/GDrive/Github/MyDailyDrive/daily_drive.py >> /Volumes/GDrive/Github/MyDailyDrive/daily_drive.log 2>&1
-```
-
-This runs the script at **7:00 AM every day**. Change `7` to any hour you prefer.
-
-Save and exit (`Escape` then `:wq` then `Enter` in vi).
-
-Verify it was saved:
-```bash
-crontab -l
-```
-
-### Allow cron to run on macOS
-
-macOS may block cron from accessing files. If the script doesn't run:
-
-1. Go to **System Settings → Privacy & Security → Full Disk Access**
-2. Click **+** and add `/usr/sbin/cron`
+To add, remove, or reorder them, edit `PRIORITY_PODCAST_IDS` at the top of `daily_drive.py`. See **Finding a Spotify Show ID** below.
 
 ---
 
-## Step 7 — Create the GitHub repository and push
+## Step 6 — Schedule with LaunchAgent (runs automatically every morning)
+
+A LaunchAgent is the recommended way to schedule the script on macOS. Unlike cron, it runs in your user session so network drives (like Google Drive) are guaranteed to be mounted.
+
+### 6a — Create the wrapper script
 
 ```bash
-cd /Volumes/GDrive/Github/MyDailyDrive
-
-# Initialize the git repo (already done if you cloned this)
-git init
-git add daily_drive.py requirements.txt .env.example .gitignore README.md
-git commit -m "Initial commit: My Daily Drive playlist builder"
+mkdir -p ~/.local/bin
 ```
 
-Then create a new **public** or **private** repository called `MyDailyDrive` on GitHub (via the GitHub website), and push:
+Create `~/.local/bin/daily_drive_run.sh` with this content:
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/MyDailyDrive.git
-git branch -M main
-git push -u origin main
+#!/bin/bash
+# Wait up to 2 minutes for GDrive to mount
+for i in $(seq 1 24); do
+    if [ -d "/Volumes/GDrive/Github/MyDailyDrive" ]; then
+        break
+    fi
+    sleep 5
+done
+
+if [ ! -d "/Volumes/GDrive/Github/MyDailyDrive" ]; then
+    echo "$(date): GDrive not mounted after 2 minutes, aborting" >> /tmp/daily_drive_error.log
+    exit 1
+fi
+
+exec /Volumes/GDrive/Github/MyDailyDrive/.venv/bin/python3 /Volumes/GDrive/Github/MyDailyDrive/daily_drive.py \
+    >> /Volumes/GDrive/Github/MyDailyDrive/daily_drive.log 2>&1
 ```
 
-Replace `YOUR_USERNAME` with your GitHub username.
+Make it executable:
+
+```bash
+chmod +x ~/.local/bin/daily_drive_run.sh
+```
+
+### 6b — Create the LaunchAgent plist
+
+Create `~/Library/LaunchAgents/com.mahoney.dailydrive.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mahoney.dailydrive</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/mahoney/.local/bin/daily_drive_run.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>5</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/daily_drive_launchagent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/daily_drive_error.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
+```
+
+### 6c — Load the LaunchAgent
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.mahoney.dailydrive.plist
+```
+
+Verify it loaded:
+
+```bash
+launchctl list | grep mahoney.dailydrive
+```
+
+### 6d — Schedule a wake (if your Mac sleeps overnight)
+
+```bash
+sudo pmset repeat wakeorpoweron MTWRFSU 04:55:00
+```
+
+This wakes the Mac at 4:55 AM — 5 minutes before the script fires. Verify with:
+
+```bash
+pmset -g sched
+```
 
 ---
 
@@ -203,8 +239,9 @@ Replace `YOUR_USERNAME` with your GitHub username.
 | `Missing required environment variables` | `.env` not set up | Follow Step 3 |
 | `Authentication failed` | Wrong credentials or redirect URI | Double-check `.env` and the Spotify Dashboard redirect URI |
 | Browser opens but token isn't saved | Copied the wrong URL | Paste the full `http://127.0.0.1:8888/callback?code=…` URL |
-| `No episodes found for ABC News Daily` | Show ID changed | Find the new ID in the Spotify app and update `PRIMARY_PODCAST_ID` |
-| Cron job doesn't run | macOS privacy block | Grant Full Disk Access to `/usr/sbin/cron` (see Step 6) |
+| `No episodes found for …` | Show ID changed or show is inactive | Find the new ID in the Spotify app and update `PRIORITY_PODCAST_IDS` |
+| Script doesn't run at 5 AM | Mac was asleep | Set a scheduled wake with `pmset` (see Step 6d) |
+| GDrive not mounted when script runs | Drive mounted after script fires | The wrapper script waits up to 2 minutes; check `/tmp/daily_drive_error.log` |
 | Playlist not visible in Spotify | Created as private | Change `public=True` in `create_or_overwrite_playlist()` in the script |
 
 ---
