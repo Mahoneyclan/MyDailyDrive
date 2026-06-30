@@ -3,8 +3,8 @@
 Automatically builds a personalised **My Daily Drive** playlist in your Spotify account each morning, mixing Australian news podcast episodes with music from your library.
 
 Default behaviour:
-- Fetches the latest episode from 5 priority Australian news podcasts (always included, always in order)
-- Checks your other followed podcasts for any episode released today
+- Fetches the latest episode from 5 priority Australian news podcasts (always included, always in order); episodes older than 2 days are dropped
+- Checks your other followed podcasts for any episode released within the last 2 days (handles timezone lag between Spotify's UTC dates and AEST)
 - Pulls 50 tracks — 25 from your liked songs, 25 from your personal top tracks
 - Interleaves episodes and music (1 episode → 3 songs → 1 episode → 3 songs → …)
 - Creates or overwrites a private playlist called **My Daily Drive**

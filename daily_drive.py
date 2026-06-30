@@ -274,36 +274,42 @@ def get_latest_episode(sp: spotipy.Spotify, show_id: str, show_name: str = "") -
         return None
 
 
-def released_today(episode: dict) -> bool:
+def released_within_days(episode: dict, days: int = 2) -> bool:
     """
-    Return True if a podcast episode was published today.
+    Return True if a podcast episode was published within the last N days.
 
-    Spotify stores release dates as simple "YYYY-MM-DD" strings (e.g. "2026-06-28").
-    We compare that against today's local date to decide if the episode is new.
-
-    This is used when scanning followed podcasts — we only add those episodes
-    if they were released today. Priority podcasts are always added regardless.
+    Uses a 2-day window (default) rather than exact date matching to handle:
+      - Timezone lag: Spotify dates are UTC; AEST is UTC+10, so a late-UTC
+        episode can appear as "yesterday" even though it's today locally.
+      - Missed days: episodes that slipped through on a previous run are
+        still picked up the next day.
     """
-    release_date = episode.get("release_date", "")       # e.g. "2026-06-28"
-    today_str = datetime.now().strftime("%Y-%m-%d")       # e.g. "2026-06-28"
-    return release_date == today_str
+    release_date = episode.get("release_date", "")
+    try:
+        age_days = (datetime.now().date() - datetime.strptime(release_date, "%Y-%m-%d").date()).days
+    except ValueError:
+        return False
+    return age_days <= days
 
 
 def get_followed_podcast_episodes(sp: spotipy.Spotify) -> list[dict]:
     """
-    Scan the user's followed podcasts and return any episodes released today.
+    Scan the user's followed podcasts and return any episodes from the last 2 days.
 
     This function handles the "bonus" podcasts — the ones beyond the fixed
     priority list. It only adds an episode if:
       - The show is in your Spotify saved shows list
       - The show is NOT already in PRIORITY_PODCAST_IDS (those are handled separately)
-      - The show released a new episode TODAY
+      - The show released a new episode within the last 2 days
+
+    The 2-day window handles timezone lag (Spotify dates are UTC, local time is AEST)
+    and catches episodes that may have been missed on a previous run.
 
     The scan stops after MAX_FOLLOWED_PODCASTS shows to keep things fast.
 
-    Returns a list of episode dictionaries (may be empty if nothing new today).
+    Returns a list of episode dictionaries (may be empty if nothing recent).
     """
-    log.info("Checking followed podcasts for new episodes today …")
+    log.info("Checking followed podcasts for new episodes …")
     today_episodes: list[dict] = []
 
     # 'offset' tracks our position in the paginated list of followed shows.
@@ -345,8 +351,8 @@ def get_followed_podcast_episodes(sp: spotipy.Spotify) -> list[dict]:
 
             # Check if this show has a new episode out today
             episode = get_latest_episode(sp, show_id, show_name)
-            if episode and released_today(episode):
-                log.info('  -> New today from %s: "%s"', show_name, episode["name"])
+            if episode and released_within_days(episode):
+                log.info('  -> New (within 2 days) from %s: "%s"', show_name, episode["name"])
                 today_episodes.append(episode)
 
             checked += 1  # Count this show as checked
@@ -356,7 +362,7 @@ def get_followed_podcast_episodes(sp: spotipy.Spotify) -> list[dict]:
         if not results.get("next"):
             break  # "next" is None when we've reached the last page
 
-    log.info("Found %d new episode(s) from followed podcasts today.", len(today_episodes))
+    log.info("Found %d recent episode(s) from followed podcasts.", len(today_episodes))
     return today_episodes
 
 
@@ -686,25 +692,34 @@ def main():
     user_id = sp.current_user()["id"]  # We need the user ID to create/find playlists
 
     # ── Step 2: Fetch priority podcast episodes ───────────────────────────────
-    # These are always included and always in the same order (as configured above).
-    # We fetch the latest episode from each show, regardless of when it was released.
+    # Episodes older than 2 days are considered stale and dropped.
     episode_uris: list[str] = []
 
     for show_id in PRIORITY_PODCAST_IDS:
         show_name = PRIORITY_PODCAST_NAMES.get(show_id, show_id)
         episode = get_latest_episode(sp, show_id, show_name)
 
-        if episode:
-            uri = episode.get("uri")
-            if uri:
-                episode_uris.append(uri)  # Add to our ordered list
-        else:
-            # Log a warning but keep going — a missing episode won't stop the script
+        if not episode:
             log.warning(
                 "Could not fetch episode for %s — skipping. "
                 "Check the show ID in PRIORITY_PODCAST_IDS at the top of this script.",
                 show_name,
             )
+            continue
+
+        release_date = episode.get("release_date", "")
+        try:
+            age_days = (datetime.now().date() - datetime.strptime(release_date, "%Y-%m-%d").date()).days
+        except ValueError:
+            age_days = 0
+
+        if age_days > 2:
+            log.warning('Dropping %s — last episode is %d day(s) old ("%s")', show_name, age_days, episode["name"])
+            continue
+
+        uri = episode.get("uri")
+        if uri:
+            episode_uris.append(uri)
 
     # ── Step 3: Fetch today's episodes from other followed podcasts ───────────
     # Only runs if INCLUDE_FOLLOWED_PODCASTS is True.
